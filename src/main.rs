@@ -127,6 +127,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> 
     let mut index = repo.index()?;
 
     index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)?;
+    index.write()?;
     let tree_oid = index.write_tree()?;
 
     // help
