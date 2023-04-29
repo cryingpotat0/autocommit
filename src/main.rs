@@ -129,6 +129,8 @@ fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> 
     index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)?;
     let tree_oid = index.write_tree()?;
 
+    // help
+
     let tree = repo.find_tree(tree_oid)?;
     let signature = repo.signature()?;
 
