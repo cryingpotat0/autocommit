@@ -149,7 +149,12 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     let mut callbacks = git2::RemoteCallbacks::new();
     callbacks.credentials(|_, username, allowed| {
         debug!("Getting SSH key: {:?}", username);
-        git2::Cred::ssh_key_from_agent(username.unwrap())
+        git2::Cred::ssh_key(
+            username.unwrap(),
+            None,
+            std::path::Path::new(&format!("{}/.ssh/id_rsa", env::var("HOME").unwrap())),
+            None,
+        )
     });
     let mut connection = remote.connect_auth(git2::Direction::Push, Some(callbacks), None)?;
     connection.remote().push(&["refs/heads/master"], None)?;
