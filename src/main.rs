@@ -147,7 +147,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
 
     let mut remote = repo.find_remote("origin")?;
     let mut callbacks = git2::RemoteCallbacks::new();
-    callbacks.credentials(|_, username, allowed| {
+    callbacks.credentials(|_, username, _| {
         debug!("Getting SSH key: {:?}", username);
         git2::Cred::ssh_key(
             username.unwrap(),
