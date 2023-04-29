@@ -146,7 +146,9 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     )?;
 
     let mut remote = repo.find_remote("origin")?;
-    let mut connection = remote.connect_auth(git2::Direction::Push, None, None)?;
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(|_, username, allowed| git2::Cred::ssh_key_from_agent(username.unwrap()));
+    let mut connection = remote.connect_auth(git2::Direction::Push, Some(callbacks), None)?;
     connection.remote().push(&["refs/heads/master"], None)?;
 
     info!("Changes committed and pushed.");
