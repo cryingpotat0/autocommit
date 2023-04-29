@@ -176,7 +176,7 @@ fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String>
     let response_json: serde_json::Value = if let Ok(res) = response {
         res.into_json()?
     } else {
-        debug!("Response: {:?}", response);
+        debug!("Response error: {:?}", response);
         return Err(eyre!("Failed to generate commit message"));
     };
 
