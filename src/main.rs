@@ -164,7 +164,7 @@ fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String>
         .set("Authorization", format!("Bearer {}", api_key).as_str())
         .set("Content-Type", "application/json")
         .send_json(ureq::json!({
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4",
             "messages": [{
               "role": "user",
               "content": prompt,
