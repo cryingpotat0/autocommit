@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use color_eyre::{Report, Result};
+use color_eyre::{eyre::eyre, Report, Result};
 use git2::{DiffOptions, Repository, StatusOptions};
 use std::env;
 use tracing::{debug, info};
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     match &cli.command {
         Commands::Run { path } => {
             debug!("Running {}", path.display());
-            run(path.to_path_buf());
+            run(path.to_path_buf())?;
         }
         Commands::Create { path, frequency } => {
             debug!("Creating {} with frequency {}", path.display(), frequency);
@@ -74,7 +74,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn run(repo_path: std::path::PathBuf) -> Result<()> {
     let repo = Repository::open(repo_path)?;
 
     let mut status_opts = StatusOptions::new();
@@ -94,10 +94,8 @@ fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> 
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     let diff_stats = diff.stats()?;
-    let diff_string = if diff_stats.files_changed() == 0 {
+    let mut diff_string = if diff_stats.files_changed() == 0 {
         String::new()
-    } else if diff_stats.insertions() + diff_stats.deletions() > 1500 {
-        format!("{} files changed.", diff_stats.files_changed())
     } else {
         let mut val = String::new();
         diff.print(git2::DiffFormat::Patch, |_, _, line| {
@@ -114,6 +112,11 @@ fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> 
     if diff_string.is_empty() {
         info!("No changes to commit, exiting.");
         return Ok(());
+    }
+
+    if diff_string.len() > 1000 {
+        info!("Diff too large, truncating.");
+        diff_string.truncate(1000);
     }
 
     let commit_message = match env::var("OPENAI_API_KEY") {
@@ -152,25 +155,34 @@ fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> 
 
 fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String> {
     // hehehe
-    let prompt = format!("Describe the following code changes:\n\n{}", diff_string);
+    let prompt = format!("You are CommitBot, an assistant tasked with writing helpful commit messages based on code changes.
+      You will be given a set of patches of code changes, and you must write a short commit message describing the changes. Do not be verbose. 
+      Your response must include only high level logical changes if the diff is large, otherwise you may include specific changes.
+      Try to fit your response in one line.
+      \n\n{}", diff_string);
+    let response = ureq::post("https://api.openai.com/v1/chat/completions")
+        .set("Authorization", format!("Bearer {}", api_key).as_str())
+        .set("Content-Type", "application/json")
+        .send_json(ureq::json!({
+            "model": "gpt-3.5-turbo",
+            "messages": [{
+              "role": "user",
+              "content": prompt,
+            }],
+            "max_tokens": 1000,
+            "n": 1,
+            "temperature": 0.1,
+        }));
+    let response_json: serde_json::Value = if let Ok(res) = response {
+        res.into_json()?
+    } else {
+        debug!("Response: {:?}", response);
+        return Err(eyre!("Failed to generate commit message"));
+    };
 
-    let response_json: serde_json::Value =
-        ureq::post("https://api.openai.com/v1/engines/davinci-codex/completions")
-            .set("Authorization", format!("Bearer {}", api_key).as_str())
-            .set("Content-Type", "application/json")
-            .send_json(
-                ureq::json!({
-                    "prompt": prompt,
-                    "max_tokens": 1000,
-                    "n": 1,
-                    "stop": ["\n"],
-                    "temperature": 0.1,
-                })
-                .to_string(),
-            )?
-            .into_json()?;
+    debug!("Response: {:?}", response_json);
 
-    let commit_message = response_json["choices"][0]["text"]
+    let commit_message = response_json["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("Generated commit message not available")
         .trim()
