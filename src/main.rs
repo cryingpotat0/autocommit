@@ -150,6 +150,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String> {
+    // hehehe
     let prompt = format!("Describe the following code changes:\n\n{}", diff_string);
 
     let response_json: serde_json::Value =
