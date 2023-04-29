@@ -146,7 +146,8 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     )?;
 
     let mut remote = repo.find_remote("origin")?;
-    remote.push(&["refs/heads/master"], None)?;
+    let mut connection = remote.connect_auth(git2::Direction::Push, None, None)?;
+    connection.remote().push(&["refs/heads/master"], None)?;
 
     info!("Changes committed and pushed.");
 
@@ -164,7 +165,7 @@ fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String>
         .set("Authorization", format!("Bearer {}", api_key).as_str())
         .set("Content-Type", "application/json")
         .send_json(ureq::json!({
-            "model": "gpt-4",
+            "model": "gpt-3.5-turbo",
             "messages": [{
               "role": "user",
               "content": prompt,
