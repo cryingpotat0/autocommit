@@ -9,7 +9,7 @@ use std::{env, process::Stdio};
 use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 
-static COMMAND_NAME: &str = "ls";
+static COMMAND_NAME: &str = "/Users/raghav/Documents/projects/autocommit/target/release/autocommit";
 
 fn setup() -> Result<(), Report> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
@@ -93,6 +93,7 @@ fn main() -> Result<()> {
                 ],
                 COMMAND_NAME.to_string(),
                 vec![
+                    "run".to_string(), // Run our binary.
                     path.to_str().unwrap().to_string(),
                     ">>".to_string(),
                     format!("{}/.autocommit_log", path.to_str().unwrap().to_string()),
@@ -117,7 +118,8 @@ fn main() -> Result<()> {
             let mut autocommits = list()?;
             let mut deleted = false;
             autocommits.retain(|e| {
-                if e.args[0] != path.to_str().unwrap() {
+                // TODO: make this conditional better, and less error prone.
+                if e.args[1] != path.to_str().unwrap() {
                     true
                 } else {
                     deleted = true;
