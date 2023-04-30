@@ -242,6 +242,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     }
 
     let mut diff_opts = DiffOptions::new();
+    diff_opts = diff_opts.include_untracked(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     let diff_stats = diff.stats()?;
