@@ -187,13 +187,15 @@ impl CronLine {
     }
 }
 
+// TODO: this prevents the user from running other cron jobs rn :(
 fn write_autocommits(autocommits: &Vec<CronLine>) -> Result<()> {
     let mut file = File::create("/tmp/crontab.txt")?;
-    let data = autocommits
-        .iter()
-        .map(|a| a.to_string())
-        .collect::<Vec<String>>()
-        .join("\n")
+    let data = format!("OPENAI_API_KEY={}\n\n", env::var("OPENAI_API_KEY")?)
+        + &autocommits
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
         + "\n";
     file.write_all(data.as_bytes())?;
 
