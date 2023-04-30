@@ -1,9 +1,15 @@
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::eyre, Report, Result};
+use derive_more::Display;
 use git2::{DiffOptions, Repository, StatusOptions};
-use std::env;
+use std::fs::{canonicalize, File};
+use std::io::{Read, Write};
+use std::process::Command;
+use std::{env, process::Stdio};
 use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
+
+static COMMAND_NAME: &str = "ls";
 
 fn setup() -> Result<(), Report> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
@@ -42,7 +48,7 @@ enum Commands {
 
         /// Minutes between autocommits
         #[clap(long, short = 'f')]
-        frequency: u8,
+        frequency: u32,
     },
     /// List currently configured autocommits.
     List,
@@ -58,22 +64,163 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Commands::Run { path } => {
-            debug!("Running {}", path.display());
+            let path = canonicalize(path)?;
+            info!("Running {}", path.display());
             run(path.to_path_buf())?;
         }
         Commands::Create { path, frequency } => {
-            debug!("Creating {} with frequency {}", path.display(), frequency);
+            let path = canonicalize(path)?;
+            info!(
+                "Creating autocommit on {} with frequency {}",
+                path.display(),
+                frequency
+            );
+            // Check if autocommit exists on path.
+            let mut autocommits = list()?;
+            for autocommit in autocommits.iter() {
+                if autocommit.command == path.to_str().unwrap() {
+                    return Err(eyre!("Autocommit already exists on path"));
+                }
+            }
+
+            autocommits.push(CronLine::new(
+                [
+                    format!("*/{}", frequency).to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                ],
+                COMMAND_NAME.to_string(),
+                vec![
+                    path.to_str().unwrap().to_string(),
+                    ">>".to_string(),
+                    format!("{}/.autocommit_log", path.to_str().unwrap().to_string()),
+                    "2>&1".to_string(),
+                ],
+            ));
+            write_autocommits(&autocommits)?;
         }
         Commands::List => {
-            debug!("Listing");
+            info!("Listing");
+            let autocommits = list()?;
+            info!("Found {} autocommits", autocommits.len());
+            for autocommit in autocommits {
+                info!("{}", autocommit);
+            }
         }
         Commands::Delete { path } => {
-            debug!("Deleting {}", path.display());
+            let path = canonicalize(path)?;
+            info!("Deleting {}", path.display());
+
+            // Check if autocommit exists on path.
+            let mut autocommits = list()?;
+            let mut deleted = false;
+            autocommits.retain(|e| {
+                if e.args[0] != path.to_str().unwrap() {
+                    true
+                } else {
+                    deleted = true;
+                    false
+                }
+            });
+            if !deleted {
+                return Err(eyre!("Autocommit not found on path {}", path.display()));
+            }
+            debug!("Autocommits {:?}", autocommits);
+            write_autocommits(&autocommits)?;
         }
     }
     Ok(())
 }
 
+#[derive(Debug, Default, Display)]
+#[display(fmt = "{:?} {:?} {:?}", frequency, command, args)]
+struct CronLine {
+    frequency: [String; 5],
+    command: String,
+    args: Vec<String>,
+}
+
+impl CronLine {
+    fn new(frequency: [String; 5], command: String, args: Vec<String>) -> Self {
+        Self {
+            frequency,
+            command,
+            args,
+        }
+    }
+
+    fn parse(line: &str) -> Result<CronLine> {
+        let parts = line.split_whitespace();
+        let mut cron_line = CronLine::default();
+        for (i, part) in parts.enumerate() {
+            match i {
+                0..=4 => cron_line.frequency[i] = part.to_string(),
+                5 => cron_line.command = part.to_string(),
+                _ => cron_line.args.push(part.to_string()),
+            }
+        }
+
+        if cron_line.command.is_empty() || cron_line.args.is_empty() {
+            return Err(eyre!("Invalid cron line, missing parts "));
+        }
+
+        for part in cron_line.frequency.iter() {
+            if part.is_empty() {
+                return Err(eyre!("Invalid cron line frequency, missing parts "));
+            }
+        }
+
+        Ok(cron_line)
+    }
+
+    fn to_string(&self) -> String {
+        format!(
+            "{} {} {}",
+            self.frequency.join(" "),
+            self.command,
+            self.args.join(" ")
+        )
+    }
+}
+
+fn write_autocommits(autocommits: &Vec<CronLine>) -> Result<()> {
+    let mut file = File::create("/tmp/crontab.txt")?;
+    let data = autocommits
+        .iter()
+        .map(|a| a.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
+        + "\n";
+    file.write_all(data.as_bytes())?;
+
+    // Create cron.
+    Command::new("crontab").arg("/tmp/crontab.txt").spawn()?;
+    Ok(())
+}
+
+fn list() -> Result<Vec<CronLine>> {
+    let command = Command::new("crontab")
+        .arg("-l")
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let mut command_output = String::new();
+    command
+        .stdout
+        .unwrap()
+        .read_to_string(&mut command_output)?;
+    let lines = command_output.lines();
+    let mut autocommits = Vec::new();
+    for line in lines {
+        if line.contains(COMMAND_NAME) {
+            autocommits.push(CronLine::parse(line)?);
+        }
+    }
+    Ok(autocommits)
+}
+
+// Run command and helpers
 fn run(repo_path: std::path::PathBuf) -> Result<()> {
     let repo = Repository::open(repo_path)?;
 
