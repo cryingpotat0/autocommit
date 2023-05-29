@@ -3,6 +3,8 @@ name = "autocommit"
 version = "0.1.0"
 edition = "2021"
 repository = "https://github.com/raghavanand98/autocommit"
+description = "A simple tool to automatically commit changes to a git repository using GPT-3.5 to generate commit summaries"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
