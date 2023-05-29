@@ -22,3 +22,4 @@ There are a few rough edges that need to be fixed, although the general structur
 - Improve the API key piping story
 - Improve robustness to different configurations of git repos. The wrapper library for `libgit` was used, but it might be better to simply dispatch subprocess commands to automatically pick up the right SSH keys, add untracked files etc.
 - Improve the logging story so people don't have to remember to add `.autocommit_log` to their `.gitignore`
+- Allow other cron jobs to be added
