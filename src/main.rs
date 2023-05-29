@@ -9,7 +9,7 @@ use std::{env, process::Stdio};
 use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 
-static COMMAND_NAME: &str = "/Users/raghav/Documents/projects/autocommit/target/release/autocommit";
+static COMMAND_NAME: &str = "autocommit";
 
 fn setup() -> Result<(), Report> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
