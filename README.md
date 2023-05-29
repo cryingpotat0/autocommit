@@ -1,8 +1,9 @@
 # Autocommit
 
 ## Installation
-Download the releases from the releases page or use the install script
+Download the releases from the [releases page](https://github.com/raghavanand98/autocommit/releases/latest) or use the install script
 ```
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/raghavanand98/autocommit/releases/download/v0.1.3/autocommit-installer.sh | sh
 ```
 
 On MacOS you can use Homebrew to install `autocommit`.
