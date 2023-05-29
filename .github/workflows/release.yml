@@ -103,15 +103,14 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v3
-      - name: Install OpenSSL
-        run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            choco install openssl
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            brew install openssl@1.1
-          else
+      - uses: knicknic/os-specific-run@v1.0.3
+        with:
+          macos: brew install openssl@1.1
+          linux: |
+            echo "Hi from linux"
             sudo apt-get install libssl-dev
-          fi
+            echo "Hi from linux second line"
+          windows: choco install openssl
       - name: Install Rust
         run: rustup update 1.67.1 --no-self-update && rustup default 1.67.1
       - name: Install cargo-dist
