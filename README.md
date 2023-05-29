@@ -1,5 +1,19 @@
 # Autocommit
 
+## Installation
+Download the releases from the releases page or use the install script
+```
+```
+
+On MacOS you can use Homebrew to install `autocommit`.
+
+```
+brew tap raghavanand98/autocommit
+brew install autocommit
+```
+
+## Usage
+
 Autocommit is a tool to automatically create commits of a repo every X minutes. If you have an OpenAI key (env var as `OPENAI_API_KEY`) the commit diff (upto 1500 characters) is passed to gpt-3.5-turbo to summarize the commit to create a meaningful commit message. Otherwise, the current datetime is used as the commit message.
 
 Autocommit has 4 commands:

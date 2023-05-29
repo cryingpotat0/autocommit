@@ -1,0 +1,3 @@
+[submodule "homebrew-autocommit"]
+	path = homebrew-autocommit
+	url = https://github.com/raghavanand98/homebrew-autocommit
