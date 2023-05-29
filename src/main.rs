@@ -252,7 +252,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
         let mut val = String::new();
         diff.print(git2::DiffFormat::Patch, |_, _, line| {
             match line.origin() {
-                '+' | '-' | ' ' => print!("{}", line.origin()),
+                '+' | '-' | ' ' => info!("{}", line.origin()),
                 _ => {}
             }
             val += &format!("{}", String::from_utf8_lossy(line.content()));
