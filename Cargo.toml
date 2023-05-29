@@ -1,6 +1,6 @@
 [package]
 name = "autocommit"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 repository = "https://github.com/raghavanand98/autocommit"
 description = "A simple tool to automatically commit changes to a git repository using GPT-3.5 to generate commit summaries"
