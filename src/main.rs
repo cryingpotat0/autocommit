@@ -246,7 +246,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     let diff_stats = diff.stats()?;
-    let mut diff_string = if diff_stats.files_changed() == 0 {
+    let mut diff_string = if diff_stats.files_changed() + diff_stats.insertions() + diff_stats.deletions() == 0 {
         String::new()
     } else {
         let mut val = String::new();
