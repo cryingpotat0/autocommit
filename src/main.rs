@@ -211,6 +211,9 @@ fn run_command_in_dir(dir: &std::path::PathBuf, command: &str, args: &[&str]) ->
 
 fn create(path: &std::path::PathBuf, frequency: u32) -> Result<()> {
     let path = canonicalize(path)?;
+    if !path.join(".git").is_dir() {
+        return Err(eyre!("Path is not a git repo"));
+    }
     info!(
         "Creating autocommit on {} with frequency {}",
         path.display(),
