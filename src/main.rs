@@ -250,6 +250,7 @@ async fn run(repo_path: std::path::PathBuf) -> Result<()> {
     // Run `git status` and check if there are any changes.
     let git_status_out = run_command_in_dir(&repo_path, "git", &["status"])?;
     if git_status_out.contains("nothing to commit, working tree clean") {
+        info!("no changes: {}", git_status_out);
         return Ok(());
     }
 
