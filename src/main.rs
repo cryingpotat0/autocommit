@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::eyre, Report, Result};
 use derive_more::Display;
-use git2::{DiffOptions, Repository, StatusOptions};
 use openai_api_rs::v1::api::Client;
 use openai_api_rs::v1::chat_completion::{self, ChatCompletionRequest};
 use std::fs::{canonicalize, File};
@@ -227,95 +226,36 @@ fn list() -> Result<Vec<CronLine>> {
     Ok(autocommits)
 }
 
+fn run_command_in_dir(dir: &std::path::PathBuf, command: &str, args: &[&str]) -> Result<String> {
+    let mut command = Command::new(command)
+        .args(args)
+        .current_dir(dir)
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let mut command_output = String::new();
+    command
+        .stdout
+        .unwrap()
+        .read_to_string(&mut command_output)?;
+    Ok(command_output)
+}
+
 // Run command and helpers
 async fn run(repo_path: std::path::PathBuf) -> Result<()> {
-    let repo = Repository::open(repo_path)?;
+    // Check if the provided path is a git repo.
+    if !repo_path.join(".git").is_dir() {
+        return Err(eyre!("Path is not a git repo"));
+    }
 
-    let mut status_opts = StatusOptions::new();
-    status_opts.include_untracked(true);
-
-    let has_changes = repo
-        .statuses(Some(&mut status_opts))?
-        .iter()
-        .any(|status| status.status() != git2::Status::CURRENT);
-
-    if !has_changes {
-        println!("No changes detected.");
+    // Run `git status` and check if there are any changes.
+    let git_status_out = run_command_in_dir(&repo_path, "git", &["status"])?;
+    if git_status_out.contains("nothing to commit, working tree clean") {
         return Ok(());
     }
 
-    let mut diff_opts = DiffOptions::new();
-    let mut diff_opts = diff_opts.include_untracked(true);
-    let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
-
-    let diff_stats = diff.stats()?;
-    let mut diff_string =
-        if diff_stats.files_changed() + diff_stats.insertions() + diff_stats.deletions() == 0 {
-            String::new()
-        } else {
-            let mut val = String::new();
-            diff.print(git2::DiffFormat::Patch, |_, _, line| {
-                match line.origin() {
-                    '+' | '-' | ' ' => info!("{}", line.origin()),
-                    _ => {}
-                }
-                val += &format!("{}", String::from_utf8_lossy(line.content()));
-                true
-            })?;
-            val
-        };
-    debug!("Diff string: {}", diff_string);
-    if diff_string.is_empty() {
-        info!("No changes to commit, exiting.");
-        return Ok(());
-    }
-
-    if diff_string.len() > 1000 {
-        info!("Diff too large, truncating.");
-        diff_string.truncate(1000);
-    }
-
-    let commit_message = match env::var("OPENAI_API_KEY") {
-        Ok(api_key) => generate_commit_message(api_key, &diff_string).await?,
-        Err(_) => chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-    };
-    info!("Commit message: {}", commit_message);
-
-    let oid = repo.refname_to_id("HEAD")?;
-    let parent = repo.find_commit(oid)?;
-    let mut index = repo.index()?;
-
-    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-    let tree_oid = index.write_tree()?;
-
-    let tree = repo.find_tree(tree_oid)?;
-    let signature = repo.signature()?;
-
-    repo.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        &commit_message,
-        &tree,
-        &[&parent],
-    )?;
-
-    let mut remote = repo.find_remote("origin")?;
-    let mut callbacks = git2::RemoteCallbacks::new();
-    callbacks.credentials(|_, username, _| {
-        debug!("Getting SSH key: {:?}", username);
-        git2::Cred::ssh_key(
-            username.unwrap(),
-            None,
-            std::path::Path::new(&format!("{}/.ssh/id_rsa", env::var("HOME").unwrap())),
-            None,
-        )
-    });
-    let mut connection = remote.connect_auth(git2::Direction::Push, Some(callbacks), None)?;
-    connection.remote().push(&["refs/heads/master"], None)?;
-
-    info!("Changes committed and pushed.");
+    // Run `git diff` to get the output changes.
+    let git_diff_out = run_command_in_dir(&repo_path, "git", &["diff"])?;
+    info!("git diff output: {}", git_diff_out);
 
     Ok(())
 }
