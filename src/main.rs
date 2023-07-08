@@ -227,7 +227,7 @@ fn list() -> Result<Vec<CronLine>> {
 }
 
 fn run_command_in_dir(dir: &std::path::PathBuf, command: &str, args: &[&str]) -> Result<String> {
-    let mut command = Command::new(command)
+    let command = Command::new(command)
         .args(args)
         .current_dir(dir)
         .stdout(Stdio::piped())
@@ -250,45 +250,65 @@ async fn run(repo_path: std::path::PathBuf) -> Result<()> {
     // Run `git status` and check if there are any changes.
     let git_status_out = run_command_in_dir(&repo_path, "git", &["status"])?;
     if git_status_out.contains("nothing to commit, working tree clean") {
-        info!("no changes: {}", git_status_out);
+        debug!("no changes: {}", git_status_out);
         return Ok(());
     }
 
     // Run `git diff` to get the output changes.
     let git_diff_out = run_command_in_dir(&repo_path, "git", &["diff"])?;
-    info!("git diff output: {}", git_diff_out);
+    debug!("git diff output: {}", git_diff_out);
+
+    let api_key = env::var("OPENAI_API_KEY")?;
+    let commit_message = generate_commit_message(api_key, &git_diff_out).await?;
+    info!("commit message: {}", commit_message);
+
+    // Run `git commit -am {commit_message}` to add all changes.
+    run_command_in_dir(&repo_path, "git", &["commit", "-am", &commit_message])?;
+
+    // Run `git push` to push the changes.
+    run_command_in_dir(&repo_path, "git", &["push"])?;
 
     Ok(())
 }
 
 async fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String> {
     // hehehe
-    let prompt = format!("You are CommitBot, an assistant tasked with writing helpful commit messages based on code changes.
+    let prompt = "You are CommitBot, an assistant tasked with writing helpful commit messages based on code changes.
       You will be given a set of patches of code changes, and you must write a short commit message describing the changes. Do not be verbose. 
       Your response must include only high level logical changes if the diff is large, otherwise you may include specific changes.
       Try to fit your response in one line.
-      \n\n{}", diff_string);
+      \n\n";
 
     let client = Client::new(api_key);
-    let req = ChatCompletionRequest {
-        model: chat_completion::GPT3_5_TURBO.to_string(),
-        messages: vec![chat_completion::ChatCompletionMessage {
-            role: chat_completion::MessageRole::user,
-            content: Some(prompt),
-            name: None,
+    // We want to use atmost 5 chunks of 1000 characters (arbitrary) to stay within the limit.
+
+    let mut total_commit_message = String::new();
+    for (index, chunk) in diff_string.as_bytes().chunks(5000).enumerate() {
+        if index > 5 {
+            break;
+        }
+        let req = ChatCompletionRequest {
+            model: chat_completion::GPT3_5_TURBO.to_string(),
+            messages: vec![chat_completion::ChatCompletionMessage {
+                role: chat_completion::MessageRole::user,
+                content: Some(format!("{}{}", prompt, String::from_utf8_lossy(chunk))),
+                name: None,
+                function_call: None,
+            }],
+            functions: None,
             function_call: None,
-        }],
-        functions: None,
-        function_call: None,
-    };
+        };
 
-    let resp = client.chat_completion(req).await?;
-    let commit_message = resp.choices[0]
-        .message
-        .content
-        .clone()
-        .unwrap_or("Could not generate commit message".to_string())
-        .to_string();
+        let resp = client.chat_completion(req).await?;
+        let commit_message = resp.choices[0]
+            .message
+            .content
+            .clone()
+            .unwrap_or("Could not generate commit message".to_string())
+            .to_string();
 
-    Ok(commit_message)
+        total_commit_message.push_str(&commit_message);
+    }
+
+    Ok(total_commit_message)
 }
