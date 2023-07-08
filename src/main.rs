@@ -235,7 +235,7 @@ fn create(path: &std::path::PathBuf, frequency: u32) -> Result<()> {
         .write(true)
         .append(true)
         .open(path.join(".gitignore"))?;
-    gitignore.write_all(b"\n.autocommit_log")?;
+    gitignore.write_all(b"\n.autocommit_log\n")?;
 
     let command_path = canonicalize(env::current_exe()?)?
         .to_string_lossy()
