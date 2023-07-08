@@ -85,6 +85,11 @@ async fn main() -> Result<()> {
                 }
             }
 
+            let command_path = canonicalize(env::current_exe()?)?
+                .to_string_lossy()
+                .to_string();
+            debug!("Command path {}", command_path);
+
             autocommits.push(CronLine::new(
                 [
                     format!("*/{}", frequency).to_string(),
@@ -93,7 +98,7 @@ async fn main() -> Result<()> {
                     "*".to_string(),
                     "*".to_string(),
                 ],
-                COMMAND_NAME.to_string(),
+                command_path,
                 vec![
                     "run".to_string(), // Run our binary.
                     path.to_str().unwrap().to_string(),
