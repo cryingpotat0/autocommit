@@ -3,7 +3,7 @@ use color_eyre::{eyre::eyre, Report, Result};
 use derive_more::Display;
 use openai_api_rs::v1::api::Client;
 use openai_api_rs::v1::chat_completion::{self, ChatCompletionRequest};
-use std::fs::{canonicalize, File};
+use std::fs::{canonicalize, File, OpenOptions};
 use std::io::{Read, Write};
 use std::process::Command;
 use std::{env, process::Stdio};
@@ -227,6 +227,15 @@ fn create(path: &std::path::PathBuf, frequency: u32) -> Result<()> {
             return Err(eyre!("Autocommit already exists on path"));
         }
     }
+
+    // Now we're ready to create the autocommit.
+    // First add .autocommit_log to the .gitignore of the repo.
+    let mut gitignore = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(true)
+        .open(path.join(".gitignore"))?;
+    gitignore.write_all(b"\n.autocommit_log")?;
 
     let command_path = canonicalize(env::current_exe()?)?
         .to_string_lossy()
