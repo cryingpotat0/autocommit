@@ -80,7 +80,8 @@ async fn main() -> Result<()> {
             // Check if autocommit exists on path.
             let mut autocommits = list()?;
             for autocommit in autocommits.iter() {
-                if autocommit.command == path.to_str().unwrap() {
+                // TODO: make this conditional better, and less error prone.
+                if autocommit.args[1] == path.to_str().unwrap() {
                     return Err(eyre!("Autocommit already exists on path"));
                 }
             }
