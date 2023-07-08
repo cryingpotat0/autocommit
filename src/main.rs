@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand};
 use color_eyre::{eyre::eyre, Report, Result};
 use derive_more::Display;
 use git2::{DiffOptions, Repository, StatusOptions};
+use openai_api_rs::v1::api::Client;
+use openai_api_rs::v1::chat_completion::{self, ChatCompletionRequest};
 use std::fs::{canonicalize, File};
 use std::io::{Read, Write};
 use std::process::Command;
@@ -58,7 +60,8 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     setup()?;
     let cli = Cli::parse();
 
@@ -66,7 +69,7 @@ fn main() -> Result<()> {
         Commands::Run { path } => {
             let path = canonicalize(path)?;
             info!("Running {}", path.display());
-            run(path.to_path_buf())?;
+            run(path.to_path_buf()).await?;
         }
         Commands::Create { path, frequency } => {
             let path = canonicalize(path)?;
@@ -225,7 +228,7 @@ fn list() -> Result<Vec<CronLine>> {
 }
 
 // Run command and helpers
-fn run(repo_path: std::path::PathBuf) -> Result<()> {
+async fn run(repo_path: std::path::PathBuf) -> Result<()> {
     let repo = Repository::open(repo_path)?;
 
     let mut status_opts = StatusOptions::new();
@@ -246,20 +249,21 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     let diff_stats = diff.stats()?;
-    let mut diff_string = if diff_stats.files_changed() + diff_stats.insertions() + diff_stats.deletions() == 0 {
-        String::new()
-    } else {
-        let mut val = String::new();
-        diff.print(git2::DiffFormat::Patch, |_, _, line| {
-            match line.origin() {
-                '+' | '-' | ' ' => info!("{}", line.origin()),
-                _ => {}
-            }
-            val += &format!("{}", String::from_utf8_lossy(line.content()));
-            true
-        })?;
-        val
-    };
+    let mut diff_string =
+        if diff_stats.files_changed() + diff_stats.insertions() + diff_stats.deletions() == 0 {
+            String::new()
+        } else {
+            let mut val = String::new();
+            diff.print(git2::DiffFormat::Patch, |_, _, line| {
+                match line.origin() {
+                    '+' | '-' | ' ' => info!("{}", line.origin()),
+                    _ => {}
+                }
+                val += &format!("{}", String::from_utf8_lossy(line.content()));
+                true
+            })?;
+            val
+        };
     debug!("Diff string: {}", diff_string);
     if diff_string.is_empty() {
         info!("No changes to commit, exiting.");
@@ -272,7 +276,7 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     }
 
     let commit_message = match env::var("OPENAI_API_KEY") {
-        Ok(api_key) => generate_commit_message(api_key, &diff_string)?,
+        Ok(api_key) => generate_commit_message(api_key, &diff_string).await?,
         Err(_) => chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
     };
     info!("Commit message: {}", commit_message);
@@ -316,39 +320,33 @@ fn run(repo_path: std::path::PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String> {
+async fn generate_commit_message(api_key: String, diff_string: &str) -> Result<String> {
     // hehehe
     let prompt = format!("You are CommitBot, an assistant tasked with writing helpful commit messages based on code changes.
       You will be given a set of patches of code changes, and you must write a short commit message describing the changes. Do not be verbose. 
       Your response must include only high level logical changes if the diff is large, otherwise you may include specific changes.
       Try to fit your response in one line.
       \n\n{}", diff_string);
-    let response = ureq::post("https://api.openai.com/v1/chat/completions")
-        .set("Authorization", format!("Bearer {}", api_key).as_str())
-        .set("Content-Type", "application/json")
-        .send_json(ureq::json!({
-            "model": "gpt-3.5-turbo",
-            "messages": [{
-              "role": "user",
-              "content": prompt,
-            }],
-            "max_tokens": 1000,
-            "n": 1,
-            "temperature": 0.1,
-        }));
-    let response_json: serde_json::Value = if let Ok(res) = response {
-        res.into_json()?
-    } else {
-        debug!("Response error: {:?}", response);
-        return Err(eyre!("Failed to generate commit message"));
+
+    let client = Client::new(api_key);
+    let req = ChatCompletionRequest {
+        model: chat_completion::GPT3_5_TURBO.to_string(),
+        messages: vec![chat_completion::ChatCompletionMessage {
+            role: chat_completion::MessageRole::user,
+            content: Some(prompt),
+            name: None,
+            function_call: None,
+        }],
+        functions: None,
+        function_call: None,
     };
 
-    debug!("Response: {:?}", response_json);
-
-    let commit_message = response_json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("Generated commit message not available")
-        .trim()
+    let resp = client.chat_completion(req).await?;
+    let commit_message = resp.choices[0]
+        .message
+        .content
+        .clone()
+        .unwrap_or("Could not generate commit message".to_string())
         .to_string();
 
     Ok(commit_message)
