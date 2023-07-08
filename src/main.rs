@@ -71,44 +71,7 @@ async fn main() -> Result<()> {
             run(path.to_path_buf()).await?;
         }
         Commands::Create { path, frequency } => {
-            let path = canonicalize(path)?;
-            info!(
-                "Creating autocommit on {} with frequency {}",
-                path.display(),
-                frequency
-            );
-            // Check if autocommit exists on path.
-            let mut autocommits = list()?;
-            for autocommit in autocommits.iter() {
-                // TODO: make this conditional better, and less error prone.
-                if autocommit.args[1] == path.to_str().unwrap() {
-                    return Err(eyre!("Autocommit already exists on path"));
-                }
-            }
-
-            let command_path = canonicalize(env::current_exe()?)?
-                .to_string_lossy()
-                .to_string();
-            debug!("Command path {}", command_path);
-
-            autocommits.push(CronLine::new(
-                [
-                    format!("*/{}", frequency).to_string(),
-                    "*".to_string(),
-                    "*".to_string(),
-                    "*".to_string(),
-                    "*".to_string(),
-                ],
-                command_path,
-                vec![
-                    "run".to_string(), // Run our binary.
-                    path.to_str().unwrap().to_string(),
-                    ">>".to_string(),
-                    format!("{}/.autocommit_log", path.to_str().unwrap().to_string()),
-                    "2>&1".to_string(),
-                ],
-            ));
-            write_autocommits(&autocommits)?;
+            create(path, *frequency)?;
         }
         Commands::List => {
             info!("Listing");
@@ -244,6 +207,48 @@ fn run_command_in_dir(dir: &std::path::PathBuf, command: &str, args: &[&str]) ->
         .unwrap()
         .read_to_string(&mut command_output)?;
     Ok(command_output)
+}
+
+fn create(path: &std::path::PathBuf, frequency: u32) -> Result<()> {
+    let path = canonicalize(path)?;
+    info!(
+        "Creating autocommit on {} with frequency {}",
+        path.display(),
+        frequency
+    );
+    // Check if autocommit exists on path.
+    let mut autocommits = list()?;
+    for autocommit in autocommits.iter() {
+        // TODO: make this conditional better, and less error prone.
+        if autocommit.args[1] == path.to_str().unwrap() {
+            return Err(eyre!("Autocommit already exists on path"));
+        }
+    }
+
+    let command_path = canonicalize(env::current_exe()?)?
+        .to_string_lossy()
+        .to_string();
+    debug!("Command path {}", command_path);
+
+    autocommits.push(CronLine::new(
+        [
+            format!("*/{}", frequency).to_string(),
+            "*".to_string(),
+            "*".to_string(),
+            "*".to_string(),
+            "*".to_string(),
+        ],
+        command_path,
+        vec![
+            "run".to_string(), // Run our binary.
+            path.to_str().unwrap().to_string(),
+            ">>".to_string(),
+            format!("{}/.autocommit_log", path.to_str().unwrap().to_string()),
+            "2>&1".to_string(),
+        ],
+    ));
+    write_autocommits(&autocommits)?;
+    Ok(())
 }
 
 // Run command and helpers
