@@ -1,5 +1,7 @@
 # Autocommit
 
+[![Release](https://github.com/raghavanand98/autocommit/actions/workflows/release.yml/badge.svg)](https://github.com/raghavanand98/autocommit/actions/workflows/release.yml)
+
 ## Installation
 Download the releases from the [releases page](https://github.com/raghavanand98/autocommit/releases/latest) or use the install script
 ```
@@ -33,8 +35,8 @@ The general usage pattern will just be to use `create` to set up autocommit on a
 
 
 There are a few rough edges that need to be fixed, although the general structure of the code works (all the commits in this repo have been generated through `autocommit`):
-- Make the binary path aware (it's hardcoded to my laptop right now)
-- Improve the API key piping story
-- Improve robustness to different configurations of git repos. The wrapper library for `libgit` was used, but it might be better to simply dispatch subprocess commands to automatically pick up the right SSH keys, add untracked files etc.
-- Improve the logging story so people don't have to remember to add `.autocommit_log` to their `.gitignore`
+- Make the binary path aware (it's hardcoded to my laptop right now) ✅
+- Improve the API key piping story ✅
+- Improve robustness to different configurations of git repos. The wrapper library for `libgit` was used, but it might be better to simply dispatch subprocess commands to automatically pick up the right SSH keys, add untracked files etc. ✅
+- Improve the logging story so people don't have to remember to add `.autocommit_log` to their `.gitignore` ✅
 - Allow other cron jobs to be added
